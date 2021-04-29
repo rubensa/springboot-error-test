@@ -1,0 +1,153 @@
+{
+  // A display name for the container.
+  "name": "springboot-error-test",
+  // The location of a Dockerfile that defines the contents of the container. 
+  // The path is relative to the devcontainer.json file.
+  "dockerFile": "Dockerfile",
+  // On Linux, the container user's UID/GID will be updated to match your local user.
+  "updateRemoteUserUID": true,
+  // A set of name-value pairs that sets or overrides environment variables for the container.
+  "containerEnv": {
+    // Timezone
+    "TZ": "Europe/Madrid"
+  },
+  // An array of additional mount points to add to the container when created.
+  "mounts": [
+    // VSCode server extensions cache
+    "type=volume,source=vscode-server-extensions-cache,target=/home/user/.vscode-server/extensionsCache",
+    // SDKMan archives cache
+    "type=volume,source=sdkman-archives-cache,target=/opt/sdkman/archives",
+    // Maven repository cache
+    "type=volume,source=m2-repository-cache,target=/home/user/.m2/repository"
+  ],
+  // A command string or list of command arguments to run inside the container after is created. 
+  // The commands execute from the workspaceFolder in the container. 
+  // The array syntax will invoke the command directly without using a shell. 
+  "postCreateCommand": [
+    "/bin/bash",
+    "-i",
+    "-c",
+    "export JAVA_VERSION=11.0; export JAVA_INSTALL_VERSION=$(sdk list java | grep -o \"${JAVA_VERSION}\\.[0-9\\.]*hs-adpt\" | head -1); sdk install java $JAVA_INSTALL_VERSION || true; ln -s /opt/sdkman/candidates/java/$JAVA_INSTALL_VERSION /opt/sdkman/candidates/java/$JAVA_VERSION; export JAVA_VERSION=8.0; export JAVA_INSTALL_VERSION=$(sdk list java | grep -o \"${JAVA_VERSION}\\.[0-9\\.]*hs-adpt\" | head -1); yes | sdk install java $JAVA_INSTALL_VERSION || true; ln -s /opt/sdkman/candidates/java/$JAVA_INSTALL_VERSION /opt/sdkman/candidates/java/$JAVA_VERSION; curl -sSL https://raw.github.com/juven/maven-bash-completion/master/bash_completion.bash >> ~/.bashrc;"
+  ],
+  // Indicates the type of shell VS Code should use to "probe" for user environment variables to use by default 
+  // while debugging or running a task: none (default), interactiveShell, loginShell, or loginInteractiveShell.
+  "userEnvProbe": "interactiveShell",
+  // An array of extension IDs that specify the extensions that should be installed inside the container when it is created. 
+  "extensions": [
+    // GIT support
+    "mhutchie.git-graph",
+    "eamodio.gitlens",
+    // History support
+    "xyz.local-history",
+    // Spring boot support
+    "pivotal.vscode-boot-dev-pack",
+    // JavaDoc
+    "madhavd1.javadoc-tools",
+    // Java Support
+    "dgileadi.java-decompiler",
+    "vscjava.vscode-java-pack",
+    // Lombok
+    "GabrielBB.vscode-lombok",
+    // XML Support
+    "redhat.vscode-xml"
+  ],
+  // Adds default settings.json values into a container/machine specific settings file.
+  "settings": {
+    // Increase memory for Java Language Server
+    "java.jdt.ls.vmargs": "-noverify -Xmx3G -Xss128M -XX:+UseG1GC -XX:+UseStringDeduplication",
+    // Configure the Java Language Server runtime
+    "java.home": "/opt/sdkman/candidates/java/11.0",
+    // Configure spring-boot language server runtime
+    "spring-boot.ls.java.home": "/opt/sdkman/candidates/java/11.0",
+    // Configure Maven
+    "maven.executable.preferMavenWrapper": true,
+    // Configure Java available runtimes
+    "java.configuration.runtimes": [
+      {
+        "name": "JavaSE-1.8",
+        "path": "/opt/sdkman/candidates/java/8.0",
+      },
+      {
+        "name": "JavaSE-11",
+        "path": "/opt/sdkman/candidates/java/11.0",
+      }
+    ],
+    // Exclude folders from import via glob patterns.
+    "java.import.exclusions": [
+      "**/node_modules/**",
+      "**/.metadata/**",
+      "**/archetype-resources/**",
+      "**/META-INF/maven/**",
+      "**/NBG-Server/**"
+    ],
+    // Configure glob patterns of file paths to exclude from file watching.
+    "files.watcherExclude": {
+      // Default values
+      "**/.git/objects/**": true,
+      "**/.git/subtree-cache/**": true,
+      "**/node_modules/**": true,
+      "**/.hg/store/**": true,
+      // Extra
+      "**/tmp/**": true,
+      "**/node_modules": true,
+      "**/bower_components": true,
+      "**/dist/**": true,
+    },
+    // Configure glob patterns for excluding files and folders.
+    "files.exclude": {
+      // Default values
+      "**/.git": true,
+      "**/.svn": true,
+      "**/.hg": true,
+      "**/CVS": true,
+      "**/.DS_Store": true,
+      // Extra
+      "**/tmp/**": true,
+      "**/.gradle": true,
+      "**/.idea": true,
+      "**/.mvn": true,
+      "**/.classpath": true,
+      "**/.project": true,
+      "**/.settings": true,
+      "**/.factorypath": true
+    },
+    // Configure glob patterns for excluding files and folders in fulltext searches and quick open. 
+    // Inherits all glob patterns from the `files.exclude` setting.
+    "search.exclude": {
+      // Default values
+      "**/node_modules": true,
+      "**/bower_components": true,
+      "**/*.code-search": true,
+      // Extra
+      "**/target/**": true,
+      "**/dist/**": true,
+      "**/coverage": true
+    },
+    // Ensure VS Code uses the right one for terminals and tasks.
+    "terminal.integrated.shell.linux": "/bin/bash",
+    // Run interactive bash shell in VSCode integrated terminal
+    "terminal.integrated.shellArgs.linux": [
+      "-i"
+    ],
+    // Disable Minimap
+    "editor.minimap.enabled": false,
+    // Custom local history path
+    "local-history.path": "/tmp",
+    // Show control characters
+    "editor.renderControlCharacters": true,
+    // Do not use current file indentation
+    "editor.detectIndentation": false,
+    // Use 2 characters for tabs
+    "editor.tabSize": 2,
+    // Format code on paste
+    "editor.formatOnPaste": true,
+    // Format code on file save
+    "editor.formatOnSave": true,
+    // Format code while typing
+    "editor.formatOnType": true,
+    // Disable automatic port forwarding
+    "remote.autoForwardPorts": false,
+    // Disable preview editor
+    "workbench.editor.enablePreview": false
+  }
+}
