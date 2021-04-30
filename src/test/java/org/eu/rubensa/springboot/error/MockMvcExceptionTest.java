@@ -1,10 +1,6 @@
 package org.eu.rubensa.springboot.error;
 
-import javax.servlet.RequestDispatcher;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Map;
 
 import org.assertj.core.api.Assertions;
 import org.eu.rubensa.springboot.error.MockMvcExceptionTest.TestConfig.BadArgumentsException;
@@ -18,20 +14,23 @@ import org.springframework.boot.autoconfigure.web.servlet.error.BasicErrorContro
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.web.servlet.error.ErrorController;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.AnnotationUtils;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
+import org.springframework.web.bind.annotation.ControllerAdvice;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.servlet.DispatcherServlet;
-import org.springframework.web.servlet.HandlerInterceptor;
-import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
-import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
-import org.springframework.web.servlet.mvc.annotation.ResponseStatusExceptionResolver;
+import org.springframework.web.context.request.ServletWebRequest;
+import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 import org.springframework.web.util.WebUtils;
 
 /**
@@ -69,19 +68,10 @@ public class MockMvcExceptionTest {
   public void givenNotFound_whenGetSpecificException_thenNotFoundCode() throws Exception {
     String exceptionParam = "not_found";
 
-    mockMvc.perform(
-        MockMvcRequestBuilders.get("/exception/{exception_id}", exceptionParam).contentType(MediaType.APPLICATION_JSON))
-        .andDo(result -> {
-          if (result.getResolvedException() != null) {//@formatter:off
-            byte[] response = mockMvc.perform(MockMvcRequestBuilders.get("/error")
-                .requestAttr(RequestDispatcher.ERROR_STATUS_CODE, result.getResponse().getStatus())
-                .requestAttr(RequestDispatcher.ERROR_REQUEST_URI, result.getRequest().getRequestURI())
-                .requestAttr(RequestDispatcher.ERROR_EXCEPTION, result.getResolvedException())
-                .requestAttr(RequestDispatcher.ERROR_MESSAGE, String.valueOf(result.getResolvedException().getMessage())))
-                .andReturn().getResponse().getContentAsByteArray();//@formatter:on
-            result.getResponse().getOutputStream().write(response);
-          }
-        }).andExpect(MockMvcResultMatchers.status().isNotFound())
+    mockMvc
+        .perform(MockMvcRequestBuilders
+            .get("/exception/{exception_id}", exceptionParam).contentType(MediaType.APPLICATION_JSON))
+        .andExpect(MockMvcResultMatchers.status().isNotFound())
         .andExpect(result -> Assertions.assertThat(result.getResolvedException())
             .isInstanceOf(ResourceNotFoundException.class))
         .andExpect(
@@ -96,19 +86,10 @@ public class MockMvcExceptionTest {
   public void givenBadArguments_whenGetSpecificException_thenBadRequest() throws Exception {
     String exceptionParam = "bad_arguments";
 
-    mockMvc.perform(
-        MockMvcRequestBuilders.get("/exception/{exception_id}", exceptionParam).contentType(MediaType.APPLICATION_JSON))
-        .andDo(result -> {
-          if (result.getResolvedException() != null) {//@formatter:off
-            byte[] response = mockMvc.perform(MockMvcRequestBuilders.get("/error")
-                .requestAttr(RequestDispatcher.ERROR_STATUS_CODE, result.getResponse().getStatus())
-                .requestAttr(RequestDispatcher.ERROR_REQUEST_URI, result.getRequest().getRequestURI())
-                .requestAttr(RequestDispatcher.ERROR_EXCEPTION, result.getResolvedException())
-                .requestAttr(RequestDispatcher.ERROR_MESSAGE, String.valueOf(result.getResolvedException().getMessage())))
-                .andReturn().getResponse().getContentAsByteArray();//@formatter:on
-            result.getResponse().getOutputStream().write(response);
-          }
-        }).andExpect(MockMvcResultMatchers.status().isBadRequest())
+    mockMvc
+        .perform(MockMvcRequestBuilders
+            .get("/exception/{exception_id}", exceptionParam).contentType(MediaType.APPLICATION_JSON))
+        .andExpect(MockMvcResultMatchers.status().isBadRequest())
         .andExpect(
             result -> Assertions.assertThat(result.getResolvedException()).isInstanceOf(BadArgumentsException.class))
         .andExpect(
@@ -123,19 +104,10 @@ public class MockMvcExceptionTest {
   public void givenOther_whenGetSpecificException_thenInternalServerError() throws Exception {
     String exceptionParam = "dummy";
 
-    mockMvc.perform(
-        MockMvcRequestBuilders.get("/exception/{exception_id}", exceptionParam).contentType(MediaType.APPLICATION_JSON))
-        .andDo(result -> {
-          if (result.getResolvedException() != null) {//@formatter:off
-            byte[] response = mockMvc.perform(MockMvcRequestBuilders.get("/error")
-                .requestAttr(RequestDispatcher.ERROR_STATUS_CODE, result.getResponse().getStatus())
-                .requestAttr(RequestDispatcher.ERROR_REQUEST_URI, result.getRequest().getRequestURI())
-                .requestAttr(RequestDispatcher.ERROR_EXCEPTION, result.getResolvedException())
-                .requestAttr(RequestDispatcher.ERROR_MESSAGE, String.valueOf(result.getResolvedException().getMessage())))
-                .andReturn().getResponse().getContentAsByteArray();//@formatter:on
-            result.getResponse().getOutputStream().write(response);
-          }
-        }).andExpect(MockMvcResultMatchers.status().isInternalServerError())
+    mockMvc
+        .perform(MockMvcRequestBuilders.get("/exception/{exception_id}", exceptionParam)
+            .contentType(MediaType.APPLICATION_JSON))
+        .andExpect(MockMvcResultMatchers.status().isInternalServerError())
         .andExpect(result -> Assertions.assertThat(result.getResolvedException()).isInstanceOf(InternalException.class))
         .andExpect(
             result -> Assertions.assertThat(result.getResolvedException().getMessage()).isEqualTo("internal error"))
@@ -169,50 +141,54 @@ public class MockMvcExceptionTest {
    */
   static class TestConfig {
     /**
-     * This configuration is necessary because MockMvc is not a real servlet
-     * environment, therefore it does not redirect error responses to
-     * {@link ErrorController}, which produces validation response. So we need to
-     * fake it in tests. It's not ideal, but at least we can use classic MockMvc
-     * tests for testing error response.
-     * <p>
-     * This only works if someone has already handled the exception.
-     * <p>
-     * If a thrown exception is anotated with {@link ResponseStatus} the
-     * {@link ResponseStatusExceptionResolver} handles it.
+     * This advice is necessary because MockMvc is not a real servlet environment,
+     * therefore it does not redirect error responses to {@link ErrorController},
+     * which produces validation response. So we need to fake it in tests. It's not
+     * ideal, but at least we can use classic MockMvc tests for testing error
+     * response.
      */
-    @Configuration
-    public class MockMvcRestExceptionConfiguration implements WebMvcConfigurer {
+    @ControllerAdvice
+    public class MockMvcRestExceptionControllerAdvise extends ResponseEntityExceptionHandler {
+      BasicErrorController errorController;
 
-      private final BasicErrorController errorController;
-
-      public MockMvcRestExceptionConfiguration(final BasicErrorController basicErrorController) {
-        this.errorController = basicErrorController;
+      public MockMvcRestExceptionControllerAdvise(BasicErrorController errorController) {
+        this.errorController = errorController;
       }
 
+      /**
+       * Handle any generic {@link Exception} not handled by
+       * {@link ResponseEntityExceptionHandler}
+       */
+      @ExceptionHandler({ Exception.class })
+      public final ResponseEntity<Object> handleGenericException(Exception ex, WebRequest request) throws Exception {
+        HttpHeaders headers = new HttpHeaders();
+        HttpStatus status = HttpStatus.INTERNAL_SERVER_ERROR;
+        ResponseStatus responseStatus = AnnotationUtils.findAnnotation(ex.getClass(), ResponseStatus.class);
+        if (responseStatus != null) {
+          status = responseStatus.value();
+        }
+        return handleExceptionInternal(ex, null, headers, status, request);
+      }
+
+      /**
+       * Overrides
+       * {@link ResponseEntityExceptionHandler#handleExceptionInternal(Exception,
+       * Object, HttpHeaders, HttpStatus, WebRequest))} to expose error attributes to
+       * {@link BasicErrorController} and uses it to handle the response.
+       */
       @Override
-      public void addInterceptors(final InterceptorRegistry registry) {
-        registry.addInterceptor(new HandlerInterceptor() {
-          @Override
-          public void afterCompletion(final HttpServletRequest request, final HttpServletResponse response,
-              final Object handler, final Exception ex) throws Exception {
+      protected ResponseEntity<Object> handleExceptionInternal(Exception ex, Object body, HttpHeaders headers,
+          HttpStatus status, WebRequest request) {
+        request.setAttribute(WebUtils.ERROR_STATUS_CODE_ATTRIBUTE, status.value(), WebRequest.SCOPE_REQUEST);
+        request.setAttribute(WebUtils.ERROR_REQUEST_URI_ATTRIBUTE,
+            ((ServletWebRequest) request).getRequest().getRequestURI().toString(), WebRequest.SCOPE_REQUEST);
+        request.setAttribute(WebUtils.ERROR_EXCEPTION_ATTRIBUTE, ex, WebRequest.SCOPE_REQUEST);
+        request.setAttribute(WebUtils.ERROR_MESSAGE_ATTRIBUTE, ex.getMessage(), WebRequest.SCOPE_REQUEST);
 
-            final int status = response.getStatus();
-
-            if (status >= 400) {
-              request.setAttribute(RequestDispatcher.ERROR_STATUS_CODE, status);
-              request.setAttribute(WebUtils.ERROR_STATUS_CODE_ATTRIBUTE, status);
-              request.setAttribute(WebUtils.ERROR_REQUEST_URI_ATTRIBUTE, request.getRequestURI().toString());
-              // The original exception is already saved as an attribute request
-              Exception exception = (Exception) request.getAttribute(DispatcherServlet.EXCEPTION_ATTRIBUTE);
-              if (exception != null) {
-                request.setAttribute(WebUtils.ERROR_EXCEPTION_ATTRIBUTE, exception);
-                request.setAttribute(WebUtils.ERROR_MESSAGE_ATTRIBUTE, exception.getMessage());
-              }
-              new ObjectMapper().writeValue(response.getOutputStream(),
-                  MockMvcRestExceptionConfiguration.this.errorController.error(request).getBody());
-            }
-          }
-        });
+        ResponseEntity<Map<String, Object>> errorControllerResponeEntity = errorController
+            .error(((ServletWebRequest) request).getRequest());
+        return new ResponseEntity<>(errorControllerResponeEntity.getBody(), errorControllerResponeEntity.getHeaders(),
+            errorControllerResponeEntity.getStatusCode());
       }
     }
 
