@@ -1,6 +1,10 @@
 package org.eu.rubensa.springboot.error;
 
 import javax.servlet.RequestDispatcher;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.assertj.core.api.Assertions;
 import org.eu.rubensa.springboot.error.MockMvcExceptionTest.TestConfig.BadArgumentsException;
@@ -10,7 +14,9 @@ import org.hamcrest.CoreMatchers;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.autoconfigure.web.servlet.error.BasicErrorController;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.web.servlet.error.ErrorController;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -21,6 +27,12 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.DispatcherServlet;
+import org.springframework.web.servlet.HandlerInterceptor;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+import org.springframework.web.servlet.mvc.annotation.ResponseStatusExceptionResolver;
+import org.springframework.web.util.WebUtils;
 
 /**
  * Using this annotation will disable full auto-configuration and instead apply
@@ -156,6 +168,54 @@ public class MockMvcExceptionTest {
    * We only want to test the classes defined inside this test configuration
    */
   static class TestConfig {
+    /**
+     * This configuration is necessary because MockMvc is not a real servlet
+     * environment, therefore it does not redirect error responses to
+     * {@link ErrorController}, which produces validation response. So we need to
+     * fake it in tests. It's not ideal, but at least we can use classic MockMvc
+     * tests for testing error response.
+     * <p>
+     * This only works if someone has already handled the exception.
+     * <p>
+     * If a thrown exception is anotated with {@link ResponseStatus} the
+     * {@link ResponseStatusExceptionResolver} handles it.
+     */
+    @Configuration
+    public class MockMvcRestExceptionConfiguration implements WebMvcConfigurer {
+
+      private final BasicErrorController errorController;
+
+      public MockMvcRestExceptionConfiguration(final BasicErrorController basicErrorController) {
+        this.errorController = basicErrorController;
+      }
+
+      @Override
+      public void addInterceptors(final InterceptorRegistry registry) {
+        registry.addInterceptor(new HandlerInterceptor() {
+          @Override
+          public void afterCompletion(final HttpServletRequest request, final HttpServletResponse response,
+              final Object handler, final Exception ex) throws Exception {
+
+            final int status = response.getStatus();
+
+            if (status >= 400) {
+              request.setAttribute(RequestDispatcher.ERROR_STATUS_CODE, status);
+              request.setAttribute(WebUtils.ERROR_STATUS_CODE_ATTRIBUTE, status);
+              request.setAttribute(WebUtils.ERROR_REQUEST_URI_ATTRIBUTE, request.getRequestURI().toString());
+              // The original exception is already saved as an attribute request
+              Exception exception = (Exception) request.getAttribute(DispatcherServlet.EXCEPTION_ATTRIBUTE);
+              if (exception != null) {
+                request.setAttribute(WebUtils.ERROR_EXCEPTION_ATTRIBUTE, exception);
+                request.setAttribute(WebUtils.ERROR_MESSAGE_ATTRIBUTE, exception.getMessage());
+              }
+              new ObjectMapper().writeValue(response.getOutputStream(),
+                  MockMvcRestExceptionConfiguration.this.errorController.error(request).getBody());
+            }
+          }
+        });
+      }
+    }
+
     @RestController
     public class TestController {
       @GetMapping("/exception/{exception_id}")
