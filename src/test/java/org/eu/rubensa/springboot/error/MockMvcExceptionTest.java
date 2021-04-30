@@ -1,9 +1,12 @@
 package org.eu.rubensa.springboot.error;
 
+import javax.servlet.RequestDispatcher;
+
 import org.assertj.core.api.Assertions;
 import org.eu.rubensa.springboot.error.MockMvcExceptionTest.TestConfig.BadArgumentsException;
 import org.eu.rubensa.springboot.error.MockMvcExceptionTest.TestConfig.InternalException;
 import org.eu.rubensa.springboot.error.MockMvcExceptionTest.TestConfig.ResourceNotFoundException;
+import org.hamcrest.CoreMatchers;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
@@ -54,41 +57,80 @@ public class MockMvcExceptionTest {
   public void givenNotFound_whenGetSpecificException_thenNotFoundCode() throws Exception {
     String exceptionParam = "not_found";
 
-    mockMvc
-        .perform(MockMvcRequestBuilders
-            .get("/exception/{exception_id}", exceptionParam).contentType(MediaType.APPLICATION_JSON))
-        .andExpect(MockMvcResultMatchers.status().isNotFound())
+    mockMvc.perform(
+        MockMvcRequestBuilders.get("/exception/{exception_id}", exceptionParam).contentType(MediaType.APPLICATION_JSON))
+        .andDo(result -> {
+          if (result.getResolvedException() != null) {//@formatter:off
+            byte[] response = mockMvc.perform(MockMvcRequestBuilders.get("/error")
+                .requestAttr(RequestDispatcher.ERROR_STATUS_CODE, result.getResponse().getStatus())
+                .requestAttr(RequestDispatcher.ERROR_REQUEST_URI, result.getRequest().getRequestURI())
+                .requestAttr(RequestDispatcher.ERROR_EXCEPTION, result.getResolvedException())
+                .requestAttr(RequestDispatcher.ERROR_MESSAGE, String.valueOf(result.getResolvedException().getMessage())))
+                .andReturn().getResponse().getContentAsByteArray();//@formatter:on
+            result.getResponse().getOutputStream().write(response);
+          }
+        }).andExpect(MockMvcResultMatchers.status().isNotFound())
         .andExpect(result -> Assertions.assertThat(result.getResolvedException())
             .isInstanceOf(ResourceNotFoundException.class))
-        .andExpect(result -> Assertions.assertThat(result.getResolvedException().getMessage())
-            .isEqualTo("resource not found"));
+        .andExpect(
+            result -> Assertions.assertThat(result.getResolvedException().getMessage()).isEqualTo("resource not found"))
+        .andExpect(MockMvcResultMatchers.jsonPath("$.status", CoreMatchers.is(404)))
+        .andExpect(MockMvcResultMatchers.jsonPath("$.error", CoreMatchers.is("Not Found")))
+        .andExpect(MockMvcResultMatchers.jsonPath("$.message", CoreMatchers.is("resource not found")))
+        .andExpect(MockMvcResultMatchers.jsonPath("$.path", CoreMatchers.is("/exception/not_found")));
   }
 
   @Test
   public void givenBadArguments_whenGetSpecificException_thenBadRequest() throws Exception {
     String exceptionParam = "bad_arguments";
 
-    mockMvc
-        .perform(MockMvcRequestBuilders
-            .get("/exception/{exception_id}", exceptionParam).contentType(MediaType.APPLICATION_JSON))
-        .andExpect(MockMvcResultMatchers.status().isBadRequest())
+    mockMvc.perform(
+        MockMvcRequestBuilders.get("/exception/{exception_id}", exceptionParam).contentType(MediaType.APPLICATION_JSON))
+        .andDo(result -> {
+          if (result.getResolvedException() != null) {//@formatter:off
+            byte[] response = mockMvc.perform(MockMvcRequestBuilders.get("/error")
+                .requestAttr(RequestDispatcher.ERROR_STATUS_CODE, result.getResponse().getStatus())
+                .requestAttr(RequestDispatcher.ERROR_REQUEST_URI, result.getRequest().getRequestURI())
+                .requestAttr(RequestDispatcher.ERROR_EXCEPTION, result.getResolvedException())
+                .requestAttr(RequestDispatcher.ERROR_MESSAGE, String.valueOf(result.getResolvedException().getMessage())))
+                .andReturn().getResponse().getContentAsByteArray();//@formatter:on
+            result.getResponse().getOutputStream().write(response);
+          }
+        }).andExpect(MockMvcResultMatchers.status().isBadRequest())
         .andExpect(
             result -> Assertions.assertThat(result.getResolvedException()).isInstanceOf(BadArgumentsException.class))
         .andExpect(
-            result -> Assertions.assertThat(result.getResolvedException().getMessage()).isEqualTo("bad arguments"));
+            result -> Assertions.assertThat(result.getResolvedException().getMessage()).isEqualTo("bad arguments"))
+        .andExpect(MockMvcResultMatchers.jsonPath("$.status", CoreMatchers.is(400)))
+        .andExpect(MockMvcResultMatchers.jsonPath("$.error", CoreMatchers.is("Bad Request")))
+        .andExpect(MockMvcResultMatchers.jsonPath("$.message", CoreMatchers.is("bad arguments")))
+        .andExpect(MockMvcResultMatchers.jsonPath("$.path", CoreMatchers.is("/exception/bad_arguments")));
   }
 
   @Test
   public void givenOther_whenGetSpecificException_thenInternalServerError() throws Exception {
     String exceptionParam = "dummy";
 
-    mockMvc
-        .perform(MockMvcRequestBuilders.get("/exception/{exception_id}", exceptionParam)
-            .contentType(MediaType.APPLICATION_JSON))
-        .andExpect(MockMvcResultMatchers.status().isInternalServerError())
+    mockMvc.perform(
+        MockMvcRequestBuilders.get("/exception/{exception_id}", exceptionParam).contentType(MediaType.APPLICATION_JSON))
+        .andDo(result -> {
+          if (result.getResolvedException() != null) {//@formatter:off
+            byte[] response = mockMvc.perform(MockMvcRequestBuilders.get("/error")
+                .requestAttr(RequestDispatcher.ERROR_STATUS_CODE, result.getResponse().getStatus())
+                .requestAttr(RequestDispatcher.ERROR_REQUEST_URI, result.getRequest().getRequestURI())
+                .requestAttr(RequestDispatcher.ERROR_EXCEPTION, result.getResolvedException())
+                .requestAttr(RequestDispatcher.ERROR_MESSAGE, String.valueOf(result.getResolvedException().getMessage())))
+                .andReturn().getResponse().getContentAsByteArray();//@formatter:on
+            result.getResponse().getOutputStream().write(response);
+          }
+        }).andExpect(MockMvcResultMatchers.status().isInternalServerError())
         .andExpect(result -> Assertions.assertThat(result.getResolvedException()).isInstanceOf(InternalException.class))
         .andExpect(
-            result -> Assertions.assertThat(result.getResolvedException().getMessage()).isEqualTo("internal error"));
+            result -> Assertions.assertThat(result.getResolvedException().getMessage()).isEqualTo("internal error"))
+        .andExpect(MockMvcResultMatchers.jsonPath("$.status", CoreMatchers.is(500)))
+        .andExpect(MockMvcResultMatchers.jsonPath("$.error", CoreMatchers.is("Internal Server Error")))
+        .andExpect(MockMvcResultMatchers.jsonPath("$.message", CoreMatchers.is("internal error")))
+        .andExpect(MockMvcResultMatchers.jsonPath("$.path", CoreMatchers.is("/exception/dummy")));
   }
 
   /**
