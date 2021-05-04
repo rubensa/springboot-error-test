@@ -20,6 +20,8 @@
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-web</artifactId>
     </dependency>
+    <!-- Since Spring 2.3.0 the validation framework is not included in spring-boot-starter-web
+      see: https://github.com/spring-projects/spring-boot/issues/19550 -->
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-validation</artifactId>
