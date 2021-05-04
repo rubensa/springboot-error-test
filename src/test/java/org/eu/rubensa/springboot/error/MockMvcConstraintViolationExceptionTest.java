@@ -214,6 +214,12 @@ public class MockMvcConstraintViolationExceptionTest {
     }
 
     @RestController
+    /**
+     * The @Validated on the class is handled by the MethodValidationInterceptor
+     * which is a generic purpose validation mechanism for classes.
+     * <p>
+     * Due to this it throws a ConstraintViolationException.
+     */
     @Validated
     public static class TestParameterValidationController {
       @GetMapping("/test/validation/parameter-validation")
@@ -222,6 +228,12 @@ public class MockMvcConstraintViolationExceptionTest {
     }
 
     @Service
+    /**
+     * The @Validated on the class is handled by the MethodValidationInterceptor
+     * which is a generic purpose validation mechanism for classes.
+     * <p>
+     * Due to this it throws a ConstraintViolationException.
+     */
     @Validated
     public static class TestService {
       void doSomething(@Valid TestRequestBody requestBody) {
