@@ -1,10 +1,13 @@
 package org.eu.rubensa.springboot.error;
 
+import java.io.IOException;
 import java.util.Map;
 
 import org.assertj.core.api.Assertions;
 import org.eu.rubensa.springboot.error.MockMvcExceptionTest.TestConfig.BadArgumentsException;
+import org.eu.rubensa.springboot.error.MockMvcExceptionTest.TestConfig.ChainedException;
 import org.eu.rubensa.springboot.error.MockMvcExceptionTest.TestConfig.InternalException;
+import org.eu.rubensa.springboot.error.MockMvcExceptionTest.TestConfig.NoStatusException;
 import org.eu.rubensa.springboot.error.MockMvcExceptionTest.TestConfig.ResourceNotFoundException;
 import org.hamcrest.CoreMatchers;
 import org.junit.jupiter.api.Test;
@@ -53,7 +56,9 @@ import org.springframework.web.util.WebUtils;
 @WebMvcTest(
     // From Spring 2.3.0 "server.error.include-message" and
     // "server.error.include-binding-errors" is set to "never"
-    properties = { "server.error.include-message=always" })
+    properties = { "server.error.include-message=always",
+        // (never/alway/on-trace-param) by default is never
+        "server.error.include-stacktrace=on-trace-param" })
 public class MockMvcExceptionTest {
   /**
    * MockMvc is not a real servlet environment, therefore it does not redirect
@@ -115,6 +120,40 @@ public class MockMvcExceptionTest {
         .andExpect(MockMvcResultMatchers.jsonPath("$.error", CoreMatchers.is("Internal Server Error")))
         .andExpect(MockMvcResultMatchers.jsonPath("$.message", CoreMatchers.is("internal error")))
         .andExpect(MockMvcResultMatchers.jsonPath("$.path", CoreMatchers.is("/exception/dummy")));
+  }
+
+  @Test
+  public void givenNoStatus_whenGetSpecificException_thenInternalServerError() throws Exception {
+    String exceptionParam = "no_status";
+
+    mockMvc
+        .perform(MockMvcRequestBuilders.get("/exception/{exception_id}", exceptionParam)
+            .contentType(MediaType.APPLICATION_JSON))
+        .andExpect(MockMvcResultMatchers.status().isInternalServerError())
+        .andExpect(result -> Assertions.assertThat(result.getResolvedException()).isInstanceOf(NoStatusException.class))
+        .andExpect(result -> Assertions.assertThat(result.getResolvedException().getMessage()).isEqualTo("no status"))
+        .andExpect(MockMvcResultMatchers.jsonPath("$.status", CoreMatchers.is(500)))
+        .andExpect(MockMvcResultMatchers.jsonPath("$.error", CoreMatchers.is("Internal Server Error")))
+        .andExpect(MockMvcResultMatchers.jsonPath("$.message", CoreMatchers.is("no status")))
+        .andExpect(MockMvcResultMatchers.jsonPath("$.path", CoreMatchers.is("/exception/no_status")));
+  }
+
+  @Test
+  public void givenChained_whenGetSpecificException_thenInternalServerError() throws Exception {
+    String exceptionParam = "chained";
+
+    mockMvc
+        .perform(MockMvcRequestBuilders.get("/exception/{exception_id}?trace=true", exceptionParam)
+            .contentType(MediaType.APPLICATION_JSON))
+        .andExpect(MockMvcResultMatchers.status().isInternalServerError())
+        .andExpect(result -> Assertions.assertThat(result.getResolvedException()).isInstanceOf(ChainedException.class))
+        .andExpect(
+            result -> Assertions.assertThat(result.getResolvedException().getMessage()).isEqualTo("chained exception"))
+        .andExpect(MockMvcResultMatchers.jsonPath("$.status", CoreMatchers.is(500)))
+        .andExpect(MockMvcResultMatchers.jsonPath("$.error", CoreMatchers.is("Internal Server Error")))
+        .andExpect(MockMvcResultMatchers.jsonPath("$.message", CoreMatchers.is("chained exception")))
+        .andExpect(MockMvcResultMatchers.jsonPath("$.path", CoreMatchers.is("/exception/chained")))
+        .andExpect(MockMvcResultMatchers.jsonPath("$.trace", CoreMatchers.containsString("child IOException message")));
   }
 
   /**
@@ -200,6 +239,10 @@ public class MockMvcExceptionTest {
           throw new ResourceNotFoundException("resource not found");
         } else if ("bad_arguments".equals(pException)) {
           throw new BadArgumentsException("bad arguments");
+        } else if ("no_status".equals(pException)) {
+          throw new NoStatusException("no status");
+        } else if ("chained".equals(pException)) {
+          throw new ChainedException("chained exception", new IOException("child IOException message"));
         } else {
           throw new InternalException("internal error");
         }
@@ -224,6 +267,18 @@ public class MockMvcExceptionTest {
     public class ResourceNotFoundException extends RuntimeException {
       public ResourceNotFoundException(String message) {
         super(message);
+      }
+    }
+
+    public class NoStatusException extends RuntimeException {
+      public NoStatusException(String message) {
+        super(message);
+      }
+    }
+
+    public class ChainedException extends RuntimeException {
+      public ChainedException(String message, Throwable cause) {
+        super(message, cause);
       }
     }
   }

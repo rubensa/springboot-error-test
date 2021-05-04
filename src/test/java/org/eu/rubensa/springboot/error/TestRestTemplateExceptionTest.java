@@ -1,5 +1,7 @@
 package org.eu.rubensa.springboot.error;
 
+import java.io.IOException;
+
 import com.fasterxml.jackson.databind.JsonNode;
 
 import org.assertj.core.api.Assertions;
@@ -27,7 +29,9 @@ import org.springframework.web.bind.annotation.RestController;
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT,
     // From Spring 2.3.0 "server.error.include-message" and
     // "server.error.include-binding-errors" is set to "never"
-    properties = { "server.error.include-message=always" })
+    properties = { "server.error.include-message=always",
+        // (never/alway/on-trace-param) by default is never
+        "server.error.include-stacktrace=on-trace-param" })
 public class TestRestTemplateExceptionTest {
   @Autowired
   private TestRestTemplate restTemplate;
@@ -74,6 +78,35 @@ public class TestRestTemplateExceptionTest {
     Assertions.assertThat(jsonResponse.findValue("path").asText()).isEqualTo("/exception/dummy");
   }
 
+  @Test
+  public void givenNoStatus_whenGetSpecificException_thenInternalServerError() throws Exception {
+    String exceptionParam = "no_status";
+
+    final ResponseEntity<JsonNode> response = restTemplate.exchange("/exception/{exception_id}", HttpMethod.GET, null,
+        JsonNode.class, exceptionParam);
+    Assertions.assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+    JsonNode jsonResponse = response.getBody();
+    Assertions.assertThat(jsonResponse.findValue("status").asInt()).isEqualTo(500);
+    Assertions.assertThat(jsonResponse.findValue("error").asText()).isEqualTo("Internal Server Error");
+    Assertions.assertThat(jsonResponse.findValue("message").asText()).isEqualTo("no status");
+    Assertions.assertThat(jsonResponse.findValue("path").asText()).isEqualTo("/exception/no_status");
+  }
+
+  @Test
+  public void givenChained_whenGetSpecificException_thenInternalServerError() throws Exception {
+    String exceptionParam = "chained";
+
+    final ResponseEntity<JsonNode> response = restTemplate.exchange("/exception/{exception_id}?trace=true",
+        HttpMethod.GET, null, JsonNode.class, exceptionParam);
+    Assertions.assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+    JsonNode jsonResponse = response.getBody();
+    Assertions.assertThat(jsonResponse.findValue("status").asInt()).isEqualTo(500);
+    Assertions.assertThat(jsonResponse.findValue("error").asText()).isEqualTo("Internal Server Error");
+    Assertions.assertThat(jsonResponse.findValue("message").asText()).isEqualTo("chained exception");
+    Assertions.assertThat(jsonResponse.findValue("path").asText()).isEqualTo("/exception/chained");
+    Assertions.assertThat(jsonResponse.findValue("trace").asText()).contains("child IOException message");
+  }
+
   /**
    * A nested @Configuration class wild be used instead of the application’s
    * primary configuration.
@@ -105,6 +138,10 @@ public class TestRestTemplateExceptionTest {
           throw new ResourceNotFoundException("resource not found");
         } else if ("bad_arguments".equals(pException)) {
           throw new BadArgumentsException("bad arguments");
+        } else if ("no_status".equals(pException)) {
+          throw new NoStatusException("no status");
+        } else if ("chained".equals(pException)) {
+          throw new ChainedException("chained exception", new IOException("child IOException message"));
         } else {
           throw new InternalException("internal error");
         }
@@ -129,6 +166,18 @@ public class TestRestTemplateExceptionTest {
     public class ResourceNotFoundException extends RuntimeException {
       public ResourceNotFoundException(String message) {
         super(message);
+      }
+    }
+
+    public class NoStatusException extends RuntimeException {
+      public NoStatusException(String message) {
+        super(message);
+      }
+    }
+
+    public class ChainedException extends RuntimeException {
+      public ChainedException(String message, Throwable cause) {
+        super(message, cause);
       }
     }
   }
