@@ -22,6 +22,7 @@ import org.hamcrest.CoreMatchers;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration;
 import org.springframework.boot.autoconfigure.web.servlet.error.BasicErrorController;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.web.servlet.error.ErrorController;
@@ -69,7 +70,11 @@ import org.springframework.web.util.WebUtils;
 @WebMvcTest(
     // From Spring 2.3.0 "server.error.include-message" and
     // "server.error.include-binding-errors" is set to "never"
-    properties = { "server.error.include-message=always" })
+    properties = { "server.error.include-message=always" },
+    /**
+     * Exclude a specific Auto-configuration class from tests' configuration
+     */
+    excludeAutoConfiguration = SecurityAutoConfiguration.class)
 public class MockMvcConstraintViolationExceptionTest {
   /**
    * MockMvc is not a real servlet environment, therefore it does not redirect

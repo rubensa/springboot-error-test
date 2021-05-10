@@ -8,6 +8,7 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.web.client.TestRestTemplate;
@@ -32,9 +33,56 @@ import org.springframework.web.bind.annotation.RestController;
     properties = { "server.error.include-message=always",
         // (never/alway/on-trace-param) by default is never
         "server.error.include-stacktrace=on-trace-param" })
+/**
+ * Exclude a specific Auto-configuration class from tests' configuration
+ */
+@EnableAutoConfiguration(exclude = SecurityAutoConfiguration.class)
 public class TestRestTemplateExceptionTest {
   @Autowired
   private TestRestTemplate restTemplate;
+
+  @Test
+  public void givenBasic_whenGetSpecificException_thenInternalServerError() throws Exception {
+    String exceptionParam = "basic";
+
+    final ResponseEntity<JsonNode> response = restTemplate.exchange("/exception/{exception_id}", HttpMethod.GET, null,
+        JsonNode.class, exceptionParam);
+    /**
+     * The controller has been reached so {@link DefaultErrorAttributes} was able to
+     * register the exception.
+     * <p>
+     * The exception is not handled so the servlet container (Tomcat) redirects to
+     * the error page. In this case, the Spring Boot {@link BasicErrorController}.
+     */
+    Assertions.assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+    JsonNode jsonResponse = response.getBody();
+    Assertions.assertThat(jsonResponse.findValue("status").asInt()).isEqualTo(500);
+    Assertions.assertThat(jsonResponse.findValue("error").asText()).isEqualTo("Internal Server Error");
+    Assertions.assertThat(jsonResponse.findValue("message").asText()).isEqualTo("basic exception");
+    Assertions.assertThat(jsonResponse.findValue("path").asText()).isEqualTo("/exception/basic");
+  }
+
+  @Test
+  public void givenChained_whenGetSpecificException_thenInternalServerError() throws Exception {
+    String exceptionParam = "chained";
+
+    final ResponseEntity<JsonNode> response = restTemplate.exchange("/exception/{exception_id}?trace=true",
+        HttpMethod.GET, null, JsonNode.class, exceptionParam);
+    /**
+     * The controller has been reached so {@link DefaultErrorAttributes} was able to
+     * register the exception.
+     * <p>
+     * The exception is not handled so the servlet container (Tomcat) redirects to
+     * the error page. In this case, the Spring Boot {@link BasicErrorController}.
+     */
+    Assertions.assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+    JsonNode jsonResponse = response.getBody();
+    Assertions.assertThat(jsonResponse.findValue("status").asInt()).isEqualTo(500);
+    Assertions.assertThat(jsonResponse.findValue("error").asText()).isEqualTo("Internal Server Error");
+    Assertions.assertThat(jsonResponse.findValue("message").asText()).isEqualTo("chained exception");
+    Assertions.assertThat(jsonResponse.findValue("path").asText()).isEqualTo("/exception/chained");
+    Assertions.assertThat(jsonResponse.findValue("trace").asText()).contains("child IOException message");
+  }
 
   @Test
   public void givenNotFound_whenGetSpecificException_thenNotFoundCode() throws Exception {
@@ -42,6 +90,17 @@ public class TestRestTemplateExceptionTest {
 
     final ResponseEntity<JsonNode> response = restTemplate.exchange("/exception/{exception_id}", HttpMethod.GET, null,
         JsonNode.class, exceptionParam);
+    /**
+     * The controller has been reached so {@link DefaultErrorAttributes} was able to
+     * register the exception.
+     * <p>
+     * The Exception is annotated with {@link ResponseStatus} so it is handled by
+     * {@link ResponseStatusExceptionResolver}.
+     * <p>
+     * The servlet container (Tomcat) checks that the response has an error so it
+     * redirects to the error page. In this case, the Spring Boot
+     * {@link BasicErrorController}.
+     */
     Assertions.assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     JsonNode jsonResponse = response.getBody();
     Assertions.assertThat(jsonResponse.findValue("status").asInt()).isEqualTo(404);
@@ -56,6 +115,17 @@ public class TestRestTemplateExceptionTest {
 
     final ResponseEntity<JsonNode> response = restTemplate.exchange("/exception/{exception_id}", HttpMethod.GET, null,
         JsonNode.class, exceptionParam);
+    /**
+     * The controller has been reached so {@link DefaultErrorAttributes} was able to
+     * register the exception.
+     * <p>
+     * The Exception is annotated with {@link ResponseStatus} so it is handled by
+     * {@link ResponseStatusExceptionResolver}.
+     * <p>
+     * The servlet container (Tomcat) checks that the response has an error so it
+     * redirects to the error page. In this case, the Spring Boot
+     * {@link BasicErrorController}.
+     */
     Assertions.assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     JsonNode jsonResponse = response.getBody();
     Assertions.assertThat(jsonResponse.findValue("status").asInt()).isEqualTo(400);
@@ -70,41 +140,23 @@ public class TestRestTemplateExceptionTest {
 
     final ResponseEntity<JsonNode> response = restTemplate.exchange("/exception/{exception_id}", HttpMethod.GET, null,
         JsonNode.class, exceptionParam);
+    /**
+     * The controller has been reached so {@link DefaultErrorAttributes} was able to
+     * register the exception.
+     * <p>
+     * The Exception is annotated with {@link ResponseStatus} so it is handled by
+     * {@link ResponseStatusExceptionResolver}.
+     * <p>
+     * The servlet container (Tomcat) checks that the response has an error so it
+     * redirects to the error page. In this case, the Spring Boot
+     * {@link BasicErrorController}.
+     */
     Assertions.assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
     JsonNode jsonResponse = response.getBody();
     Assertions.assertThat(jsonResponse.findValue("status").asInt()).isEqualTo(500);
     Assertions.assertThat(jsonResponse.findValue("error").asText()).isEqualTo("Internal Server Error");
     Assertions.assertThat(jsonResponse.findValue("message").asText()).isEqualTo("internal error");
     Assertions.assertThat(jsonResponse.findValue("path").asText()).isEqualTo("/exception/dummy");
-  }
-
-  @Test
-  public void givenNoStatus_whenGetSpecificException_thenInternalServerError() throws Exception {
-    String exceptionParam = "no_status";
-
-    final ResponseEntity<JsonNode> response = restTemplate.exchange("/exception/{exception_id}", HttpMethod.GET, null,
-        JsonNode.class, exceptionParam);
-    Assertions.assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
-    JsonNode jsonResponse = response.getBody();
-    Assertions.assertThat(jsonResponse.findValue("status").asInt()).isEqualTo(500);
-    Assertions.assertThat(jsonResponse.findValue("error").asText()).isEqualTo("Internal Server Error");
-    Assertions.assertThat(jsonResponse.findValue("message").asText()).isEqualTo("no status");
-    Assertions.assertThat(jsonResponse.findValue("path").asText()).isEqualTo("/exception/no_status");
-  }
-
-  @Test
-  public void givenChained_whenGetSpecificException_thenInternalServerError() throws Exception {
-    String exceptionParam = "chained";
-
-    final ResponseEntity<JsonNode> response = restTemplate.exchange("/exception/{exception_id}?trace=true",
-        HttpMethod.GET, null, JsonNode.class, exceptionParam);
-    Assertions.assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
-    JsonNode jsonResponse = response.getBody();
-    Assertions.assertThat(jsonResponse.findValue("status").asInt()).isEqualTo(500);
-    Assertions.assertThat(jsonResponse.findValue("error").asText()).isEqualTo("Internal Server Error");
-    Assertions.assertThat(jsonResponse.findValue("message").asText()).isEqualTo("chained exception");
-    Assertions.assertThat(jsonResponse.findValue("path").asText()).isEqualTo("/exception/chained");
-    Assertions.assertThat(jsonResponse.findValue("trace").asText()).contains("child IOException message");
   }
 
   /**
@@ -134,17 +186,36 @@ public class TestRestTemplateExceptionTest {
     public class TestController {
       @GetMapping("/exception/{exception_id}")
       public void getSpecificException(@PathVariable("exception_id") String pException) {
-        if ("not_found".equals(pException)) {
+        if ("basic".equals(pException)) {
+          throw new BasicException("basic exception");
+        } else if ("chained".equals(pException)) {
+          throw new ChainedException("chained exception", new IOException("child IOException message"));
+        } else if ("not_found".equals(pException)) {
           throw new ResourceNotFoundException("resource not found");
         } else if ("bad_arguments".equals(pException)) {
           throw new BadArgumentsException("bad arguments");
-        } else if ("no_status".equals(pException)) {
-          throw new NoStatusException("no status");
-        } else if ("chained".equals(pException)) {
-          throw new ChainedException("chained exception", new IOException("child IOException message"));
         } else {
           throw new InternalException("internal error");
         }
+      }
+    }
+
+    public class BasicException extends RuntimeException {
+      public BasicException(String message) {
+        super(message);
+      }
+    }
+
+    public class ChainedException extends RuntimeException {
+      public ChainedException(String message, Throwable cause) {
+        super(message, cause);
+      }
+    }
+
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public class ResourceNotFoundException extends RuntimeException {
+      public ResourceNotFoundException(String message) {
+        super(message);
       }
     }
 
@@ -159,25 +230,6 @@ public class TestRestTemplateExceptionTest {
     public class InternalException extends RuntimeException {
       public InternalException(String message) {
         super(message);
-      }
-    }
-
-    @ResponseStatus(HttpStatus.NOT_FOUND)
-    public class ResourceNotFoundException extends RuntimeException {
-      public ResourceNotFoundException(String message) {
-        super(message);
-      }
-    }
-
-    public class NoStatusException extends RuntimeException {
-      public NoStatusException(String message) {
-        super(message);
-      }
-    }
-
-    public class ChainedException extends RuntimeException {
-      public ChainedException(String message, Throwable cause) {
-        super(message, cause);
       }
     }
   }

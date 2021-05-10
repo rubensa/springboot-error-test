@@ -21,6 +21,7 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.web.client.TestRestTemplate;
@@ -50,6 +51,10 @@ import org.springframework.web.util.UriComponentsBuilder;
     // From Spring 2.3.0 "server.error.include-message" and
     // "server.error.include-binding-errors" is set to "never"
     properties = { "server.error.include-message=always" })
+/**
+ * Exclude a specific Auto-configuration class from tests' configuration
+ */
+@EnableAutoConfiguration(exclude = SecurityAutoConfiguration.class)
 public class TestRestTemplateConstraintViolationExceptionTest {
   @Autowired
   private TestRestTemplate restTemplate;

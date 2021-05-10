@@ -1,38 +1,23 @@
 package org.eu.rubensa.springboot.error;
 
-import java.util.Map;
-
 import javax.validation.Valid;
 import javax.validation.constraints.NotNull;
 
 import org.assertj.core.api.Assertions;
-import org.hamcrest.CoreMatchers;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
-import org.springframework.boot.autoconfigure.web.servlet.error.BasicErrorController;
+import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.web.servlet.error.ErrorController;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.annotation.AnnotationUtils;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
 import org.springframework.web.bind.MethodArgumentNotValidException;
-import org.springframework.web.bind.annotation.ControllerAdvice;
-import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.context.request.ServletWebRequest;
-import org.springframework.web.context.request.WebRequest;
-import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
-import org.springframework.web.util.WebUtils;
 
 /**
  * Using this annotation will disable full auto-configuration and instead apply
@@ -54,7 +39,11 @@ import org.springframework.web.util.WebUtils;
 @WebMvcTest(
     // From Spring 2.3.0 "server.error.include-message" and
     // "server.error.include-binding-errors" is set to "never"
-    properties = { "server.error.include-message=always" })
+    properties = { "server.error.include-message=always" },
+    /**
+     * Exclude a specific Auto-configuration class from tests' configuration
+     */
+    excludeAutoConfiguration = SecurityAutoConfiguration.class)
 public class MockMvcMethodArgumentNotValidExceptionTest {
   /**
    * MockMvc is not a real servlet environment, therefore it does not redirect
@@ -72,16 +61,15 @@ public class MockMvcMethodArgumentNotValidExceptionTest {
     mockMvc
         .perform(
             MockMvcRequestBuilders.post("/test/validation").contentType(MediaType.APPLICATION_JSON).content(content))
+        /**
+         * The exception is among standard Spring MVC exceptions so it is handled by
+         * {@link DefaultHandlerExceptionResolver}.
+         */
         .andExpect(MockMvcResultMatchers.status().isBadRequest())
         .andExpect(result -> Assertions.assertThat(result.getResolvedException())
             .isInstanceOf(MethodArgumentNotValidException.class))
         .andExpect(result -> Assertions.assertThat(result.getResolvedException().getMessage())
-            .contains("Validation failed for argument [0]"))
-        .andExpect(MockMvcResultMatchers.jsonPath("$.status", CoreMatchers.is(400)))
-        .andExpect(MockMvcResultMatchers.jsonPath("$.error", CoreMatchers.is("Bad Request")))
-        .andExpect(MockMvcResultMatchers.jsonPath("$.message",
-            CoreMatchers.containsString("Validation failed for object='testRequestBody'. Error count: 1")))
-        .andExpect(MockMvcResultMatchers.jsonPath("$.path", CoreMatchers.is("/test/validation")));
+            .contains("Validation failed for argument [0]"));
   }
 
   /**
@@ -107,58 +95,6 @@ public class MockMvcMethodArgumentNotValidExceptionTest {
    * We only want to test the classes defined inside this test configuration
    */
   static class TestConfig {
-    /**
-     * This advice is necessary because MockMvc is not a real servlet environment,
-     * therefore it does not redirect error responses to {@link ErrorController},
-     * which produces validation response. So we need to fake it in tests. It's not
-     * ideal, but at least we can use classic MockMvc tests for testing error
-     * response.
-     */
-    @ControllerAdvice
-    public class MockMvcRestExceptionControllerAdvise extends ResponseEntityExceptionHandler {
-      BasicErrorController errorController;
-
-      public MockMvcRestExceptionControllerAdvise(BasicErrorController errorController) {
-        this.errorController = errorController;
-      }
-
-      /**
-       * Handle any generic {@link Exception} not handled by
-       * {@link ResponseEntityExceptionHandler}
-       */
-      @ExceptionHandler({ Exception.class })
-      public final ResponseEntity<Object> handleGenericException(Exception ex, WebRequest request) throws Exception {
-        HttpHeaders headers = new HttpHeaders();
-        HttpStatus status = HttpStatus.INTERNAL_SERVER_ERROR;
-        ResponseStatus responseStatus = AnnotationUtils.findAnnotation(ex.getClass(), ResponseStatus.class);
-        if (responseStatus != null) {
-          status = responseStatus.value();
-        }
-        return handleExceptionInternal(ex, null, headers, status, request);
-      }
-
-      /**
-       * Overrides
-       * {@link ResponseEntityExceptionHandler#handleExceptionInternal(Exception,
-       * Object, HttpHeaders, HttpStatus, WebRequest))} to expose error attributes to
-       * {@link BasicErrorController} and uses it to handle the response.
-       */
-      @Override
-      protected ResponseEntity<Object> handleExceptionInternal(Exception ex, Object body, HttpHeaders headers,
-          HttpStatus status, WebRequest request) {
-        request.setAttribute(WebUtils.ERROR_STATUS_CODE_ATTRIBUTE, status.value(), WebRequest.SCOPE_REQUEST);
-        request.setAttribute(WebUtils.ERROR_REQUEST_URI_ATTRIBUTE,
-            ((ServletWebRequest) request).getRequest().getRequestURI().toString(), WebRequest.SCOPE_REQUEST);
-        request.setAttribute(WebUtils.ERROR_EXCEPTION_ATTRIBUTE, ex, WebRequest.SCOPE_REQUEST);
-        request.setAttribute(WebUtils.ERROR_MESSAGE_ATTRIBUTE, ex.getMessage(), WebRequest.SCOPE_REQUEST);
-
-        ResponseEntity<Map<String, Object>> errorControllerResponeEntity = errorController
-            .error(((ServletWebRequest) request).getRequest());
-        return new ResponseEntity<>(errorControllerResponeEntity.getBody(), errorControllerResponeEntity.getHeaders(),
-            errorControllerResponeEntity.getStatusCode());
-      }
-    }
-
     @RestController
     public static class TestController {
       @PostMapping("/test/validation")
