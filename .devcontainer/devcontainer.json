@@ -18,7 +18,9 @@
     // SDKMan archives cache
     "type=volume,source=sdkman-archives-cache,target=/opt/sdkman/archives",
     // Maven repository cache
-    "type=volume,source=m2-repository-cache,target=/home/user/.m2/repository"
+    "type=volume,source=m2-repository-cache,target=/home/user/.m2/repository",
+    // User SSH configuration
+    "type=bind,source=${env:HOME}/.ssh,target=/home/user/.ssh"
   ],
   // A command string or list of command arguments to run inside the container after is created. 
   // The commands execute from the workspaceFolder in the container. 
@@ -31,6 +33,7 @@
   ],
   // Indicates the type of shell VS Code should use to "probe" for user environment variables to use by default 
   // while debugging or running a task: none (default), interactiveShell, loginShell, or loginInteractiveShell.
+  // Fire ~/.bashrc, ~/.zshrc before starting VS Code processes
   "userEnvProbe": "interactiveShell",
   // An array of extension IDs that specify the extensions that should be installed inside the container when it is created. 
   "extensions": [
@@ -123,12 +126,17 @@
       "**/dist/**": true,
       "**/coverage": true
     },
-    // Ensure VS Code uses the right one for terminals and tasks.
-    "terminal.integrated.shell.linux": "/bin/bash",
-    // Run interactive bash shell in VSCode integrated terminal
-    "terminal.integrated.shellArgs.linux": [
-      "-i"
-    ],
+    // Ensure VS Code uses the right shell for terminals and tasks.
+    "terminal.integrated.defaultProfile.linux": "bash",
+    "terminal.integrated.profiles.linux": {
+      "bash": {
+        "path": "/bin/bash",
+        "args": [
+          // Run interactive bash shell in VSCode integrated terminal
+          "-i"
+        ]
+      }
+    },
     // Disable Minimap
     "editor.minimap.enabled": false,
     // Custom local history path
